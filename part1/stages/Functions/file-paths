@@ -64,13 +64,13 @@ LANGUAGES_LIST="${INSTALL_CONFIG_DIR}/languages.txt"
 DIALOG_WARN_RC="${INSTALL_CONFIG_DIR}/dialog-warn.rc"
 DIALOG_CAUTION_RC="${INSTALL_CONFIG_DIR}/dialog-caution.rc"
 
-VERSION_FILE="/etc/xenclient.conf"
+VERSION_FILE="/etc/issue"
 
 # Log file
 INSTALLER_LOG="/var/log/installer"
 
-LICENSE_FILE="/usr/share/xenclient/EULA-en-us"
-KEYBOARDS_LIST="/usr/share/xenclient/keyboards"
+LICENSE_FILE="/usr/share/openxt/EULA-en-us"
+KEYBOARDS_LIST="/usr/share/openxt/keyboards"
 
 # Directory for files downloaded by the installer:
 INSTALL_DOWNLOAD_DIR="${INSTALL_ROOT}/downloads"
