@@ -17,28 +17,37 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
-mk_xc_lvm()
+   xenBoot="/dev/openxt/boot"
+   xenConfig="/dev/openxt/config"
+   xenCores="/dev/openxt/cores"
+   xenLog="/dev/openxt/log"
+   xenRoot="/dev/openxt/root"
+   xenOldRoot="/dev/openxt/root.old"
+   xenStor="/dev/openxt/storage"
+   xenSwap="/dev/openxt/swap"
+
+mk_lvm()
 {
     local PARTITION_DEV="$1"
     do_cmd pvcreate -ff -y "${PARTITION_DEV}" || return 1
-    do_cmd vgcreate xenclient "${PARTITION_DEV}" || return 1
-    do_cmd lvcreate --name boot     --size  12M /dev/xenclient || return 1
-    do_cmd lvcreate --name config   --size  12M /dev/xenclient || return 1
+    do_cmd vgcreate openxt "${PARTITION_DEV}" || return 1
+    do_cmd lvcreate --name boot     --size  12M /dev/openxt || return 1
+    do_cmd lvcreate --name config   --size  12M /dev/openxt || return 1
     do_cmd lvcreate --name root     --size ${DOM0_ROOT_LV_SIZE} \
-                                                /dev/xenclient || return 1
+                                                /dev/openxt || return 1
     do_cmd lvcreate --name root.new --size ${DOM0_ROOT_LV_SIZE} \
-                                                /dev/xenclient || return 1
-    do_cmd lvcreate --name swap     --size 256M /dev/xenclient || return 1
-    do_cmd lvcreate --name log      --size  64M /dev/xenclient || return 1
-    do_cmd lvcreate --name cores    --size  64M /dev/xenclient || return 1
-    do_cmd lvcreate --name storage -l +100%FREE  /dev/xenclient || return 1
-    do_cmd lvresize -f /dev/xenclient/storage -L-1G || return 1
+                                                /dev/openxt || return 1
+    do_cmd lvcreate --name swap     --size 256M /dev/openxt || return 1
+    do_cmd lvcreate --name log      --size  64M /dev/openxt || return 1
+    do_cmd lvcreate --name cores    --size  64M /dev/openxt || return 1
+    do_cmd lvcreate --name storage -l +100%FREE  /dev/openxt || return 1
+    do_cmd lvresize -f /dev/openxt/storage -L-1G || return 1
 
     do_cmd vgscan --mknodes || return 1
     do_cmd vgchange -a y || return 1
 }
 
-apply_xc_packages()
+apply_packages()
 {
     local APPLY_MODE="$1"
     local PACKAGES_DIR="$2"
@@ -81,7 +90,7 @@ apply_xc_packages()
                 #
                 # If the upgrade fails, the current installation should be left
                 # untouched, so any changes which affect it ought to be
-                # deferred until commit_xc_packages.
+                # deferred until commit_packages.
                 #
                 # For example, if this executable makes changes in /, this will
                 # only affect the new installation, but if it makes changes in
@@ -108,7 +117,7 @@ apply_xc_packages()
     return 0
 }
 
-commit_xc_packages()
+commit_packages()
 {
     local PACKAGES_DIR="$1"
 
@@ -133,7 +142,7 @@ commit_xc_packages()
                 commit_file "${DESTINATION}"
                 ;;
             exec)
-                # FIXME - revisit this - see comment in apply_xc_packages.
+                # FIXME - revisit this - see comment in apply_packages.
                 true
                 ;;
             driverexec|control)
@@ -166,9 +175,8 @@ install_dom0()
     #calc size in bytes for dom0 rootfs, convert to MB and set DOM0_ROOT_LV_SIZE
     DOM0_SIZE_BYTES=$(zcat ${DOM0_ROOTFS} | wc -c)
     DOM0_ROOT_LV_SIZE=$(((${DOM0_SIZE_BYTES} / 1048576) + 1))M
-
-    local NODE=$(get_partition_node "${XC_PARTITION}")
-    mk_xc_lvm /dev/${NODE} >&2 || return 1
+    
+    mk_lvm /dev/${PARTITION} >&2 || return 1
 
     mixedgauge "Writing filesystem..." ${PERCENT}
     PERCENT=$((PERCENT + 10))
@@ -183,11 +191,11 @@ install_dom0()
     # Generate random config key.
     openssl rand -out ${CONFIG_KEY} 512 2>/dev/null
     # Initialize config's luks header with previous key.
-    cryptsetup -q -S 7 -i 1 --cipher=aes-xts-plain64 luksFormat /dev/xenclient/config ${CONFIG_KEY} >&2 || return 1
+    cryptsetup -q -S 7 -i 1 --cipher=aes-xts-plain64 luksFormat $xenConfig ${CONFIG_KEY} >&2 || return 1
     # Adds get-config-key result to keys in config's luks header.
     local GCK=`mktemp -t`
     get-config-key > ${GCK}
-    cryptsetup -q -i 100 -d ${CONFIG_KEY} luksAddKey /dev/xenclient/config ${GCK} || {
+    cryptsetup -q -i 100 -d ${CONFIG_KEY} luksAddKey $xenConfig ${GCK} || {
         rm -f ${GCK}
         set +x
         return 1
@@ -199,7 +207,7 @@ install_dom0()
 	    -in ${CONFIG_KEY} -out ${RECOVERY_DISK_KEY_SSL}
     }
     # Open config lv.
-    cryptsetup -q -d ${CONFIG_KEY} luksOpen /dev/xenclient/config config >&2 || {
+    cryptsetup -q -d ${CONFIG_KEY} luksOpen $xenConfig config >&2 || {
         set +x
         return 1
     }
@@ -207,13 +215,13 @@ install_dom0()
     # log
     do_cmd mkdir -p -m 500 /tmp/keys
     openssl rand -out ${LOG_KEY} 128 2> /dev/null &&
-    cryptsetup -q -d ${LOG_KEY} create log /dev/xenclient/log >&2 || {
+    cryptsetup -q -d ${LOG_KEY} create log $xenLog >&2 || {
         set +x
         return 1
     }
     # cores
     openssl rand -out ${CORES_KEY} 128 2> /dev/null &&
-    cryptsetup -q -d ${CORES_KEY} create cores /dev/xenclient/cores >&2 || {
+    cryptsetup -q -d ${CORES_KEY} create cores $xenCores >&2 || {
         set +x
         return 1
     }
@@ -221,15 +229,15 @@ install_dom0()
     # device key (used to tie encrypted disks to this host)
     openssl rand -out ${DEVICE_KEY} 128 2> /dev/null
 
-    do_cmd mke2fs -j /dev/xenclient/boot                    >&2 || return 1
+    do_cmd mke2fs -j $xenBoot                    >&2 || return 1
     do_cmd mkfs.ext3 -q /dev/mapper/config                  >&2 || return 1
-    do_cmd mkfs.ext4 -N 65536 -q /dev/xenclient/storage     >&2 || return 1
+    do_cmd mkfs.ext4 -N 65536 -q $xenStor     >&2 || return 1
     do_cmd mkfs.ext3 -q /dev/mapper/log                     >&2 || return 1
     do_cmd mkfs.ext3 -q /dev/mapper/cores                   >&2 || return 1
 
-    do_cmd tune2fs -i 0 -c -1 -m 0 /dev/xenclient/boot      >&2 || return 1
+    do_cmd tune2fs -i 0 -c -1 -m 0 $xenBoot      >&2 || return 1
     do_cmd tune2fs -i 0 -c -1 -m 0 /dev/mapper/config       >&2 || return 1
-    do_cmd tune2fs -i 0 -c -1 -m 0 /dev/xenclient/storage   >&2 || return 1
+    do_cmd tune2fs -i 0 -c -1 -m 0 $xenStor   >&2 || return 1
     do_cmd tune2fs -i 0 -c -1 -m 0 /dev/mapper/log          >&2 || return 1
     do_cmd tune2fs -i 0 -c -1 -m 0 /dev/mapper/cores        >&2 || return 1
 
@@ -294,8 +302,8 @@ upgrade_dom0()
         # Catch this problem now, as it would otherwise cause a failure while
         # committing. (For debugging puposes only, to avoid rebooting before a
         # repeated upgrade:
-        #     lvremove -f /dev/xenclient/root
-        #     lvrename /dev/xenclient/root.old /dev/xenclient/root )
+        #     lvremove -f /dev/openxt/root
+        #     lvrename /dev/openxt/root.old /dev/openxt/root )
         echo "ERROR: Device ${ROOT_DEV}.old still in use." \
              "(Has the system been rebooted since the last upgrade?)" >&2
         return 1
@@ -370,9 +378,9 @@ commit_dom0()
             if [ "${EXISTING_MEASURED_STATE}" = "true" ]; then
                 echo "commit_dom0: /config is mounted, previously sealed: forcing reseal"
                 cryptsetup -q -d ${DOM0_MOUNT}/config/keys/config.key luksKillSlot \
-                    /dev/mapper/xenclient-config 0 >/dev/null 2>&1
+                    /dev/mapper/openxt-config 0 >/dev/null 2>&1
                 get-config-key > /tmp/gck && cryptsetup -q -d ${DOM0_MOUNT}/config/keys/config.key \
-                    -S 0 -i 1 luksAddKey /dev/mapper/xenclient-config /tmp/gck >/dev/null 2>&1 \
+                    -S 0 -i 1 luksAddKey /dev/mapper/openxt-config /tmp/gck >/dev/null 2>&1 \
                     || exit 1
                 touch ${DOM0_MOUNT}/boot/system/tpm/setup >&2
                 touch ${DOM0_MOUNT}/boot/system/tpm/clear-config-key >&2
@@ -397,8 +405,8 @@ mount_dom0()
     mount -t selinuxfs | grep -q -s 'selinuxfs' >&2
     [ $? -eq 0 ] && ( do_mount -o bind /selinux ${DOM0_MOUNT}/selinux || return 1 )
     # FIXME - revisit this for XC-5161:
-    do_mount /dev/xenclient/boot ${DOM0_MOUNT}/boot/system || return 1
-    do_mount -o user_xattr /dev/xenclient/storage ${DOM0_MOUNT}/storage  || return 1
+    do_mount $xenBoot ${DOM0_MOUNT}/boot/system || return 1
+    do_mount -o user_xattr $xenStor ${DOM0_MOUNT}/storage  || return 1
 
     return 0
 }
@@ -416,12 +424,12 @@ mount_config()
     elif [ ! "${EXISTING_MEASURED_STATE}" = "true" ]; then
         echo "mount_config: not sealed, not luksOpen-ed, using platform key to mount ..." >&2
         eval get-config-key | cryptsetup -q -d - luksOpen \
-            "/dev/xenclient/config" config >&2
+            "$xenConfig" config >&2
         if [ $? -eq 0 ]; then
             echo "mount_config: config mapped successfully, mounting" >&2
             do_mount /dev/mapper/config ${DOM0_MOUNT}/config || return 1
         else
-            echo "mount_config: ERROR luksOpen-ing /dev/xenclient/config" >&2
+            echo "mount_config: ERROR luksOpen-ing $xenConfig" >&2
         fi
     else # not already mounted, mapped and platform state is sealed
         echo "mount_config: /config not already mounted or mapped, and platform is sealed.  Cannot access /config" >&2
@@ -433,7 +441,7 @@ mount_config()
 install_bootloader_from_dom0fs()
 {
     do_cmd chroot ${DOM0_MOUNT} \
-           /usr/share/xenclient/install-bootloader "${LANGUAGE}" >&2 || {
+           /usr/share/openxt/install-bootloader "${LANGUAGE}" >&2 || {
         echo "Error installing the bootloader">&2
         return 1
     }
@@ -777,9 +785,14 @@ write_disk_mbr()
 mount_existing_dom0()
 {
     local MNT="$1"
+    local DEV_ROOT=""
 
-    CURRENT_MNT=$(grep "^/dev/mapper/xenclient-root " /proc/mounts |
-                  cut -f2 -d' ')
+    ### default = /dev/mapper/openxt-root so only change it if there is a need to.
+    if [ -e /dev/xenclient ]; then
+       lvrename /dev/xenclient /dev/openxt
+    fi
+
+       CURRENT_MNT=$(grep "^${ROOT_DEV}" /proc/mounts | cut -f2 -d' ')
 
     if [ "${CURRENT_MNT}" ] ; then
         do_mount --bind "${CURRENT_MNT}" "${MNT}" || return 1
@@ -794,13 +807,16 @@ mount_existing_boot()
 {
     local MNT="$1"
 
-    CURRENT_MNT=$(grep "^/dev/mapper/xenclient-boot " /proc/mounts |
-                  cut -f2 -d' ')
+    if [ -e /dev/mapper/xenclient-root ]; then
+       CURRENT_MNT=$(grep "^/dev/mapper/xenclient-boot " /proc/mounts | cut -f2 -d' ')
+    else
+       CURRENT_MNT=$(grep "^/dev/mapper/openxt-boot " /proc/mounts | cut -f2 -d' ')
+    fi
 
     if [ "${CURRENT_MNT}" ] ; then
         do_mount --bind "${CURRENT_MNT}" "${MNT}" || return 1
     else
-        do_mount -o ro "/dev/xenclient/boot" "${MNT}" || return 1
+        do_mount -o ro "$xenBoot" "${MNT}" || return 1
     fi
 
     return 0

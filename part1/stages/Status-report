@@ -47,17 +47,17 @@ do_cmd vgchange -a y >&2
 mkdir -p ${STATUS_MOUNT}
 while true; do
     # Mount boot
-    [ ! -r /dev/xenclient/boot ] && break
-    do_mount -o ro /dev/xenclient/boot ${STATUS_MOUNT}/boot/system || break
+    [ ! -r /dev/openxt/boot ] && break
+    do_mount -o ro /dev/openxt/boot ${STATUS_MOUNT}/boot/system || break
     STEPS="umount_boot,"
 
     # Mount storage
-    [ ! -r /dev/xenclient/storage ] && break
-    do_mount -o ro /dev/xenclient/storage ${STATUS_MOUNT}/storage || break
+    [ ! -r /dev/openxt/storage ] && break
+    do_mount -o ro /dev/openxt/storage ${STATUS_MOUNT}/storage || break
     STEPS="umount_storage,${STEPS}"
 
     # Mount/unlock locked partitions
-    [ ! -r /dev/xenclient/config ] && break
+    [ ! -r /dev/openxt/config ] && break
     if [ ! -r /dev/mapper/config ]; then
         CAPTURE=$(mktemp -t)
         while true; do
@@ -75,7 +75,7 @@ while true; do
             cat ${CAPTURE} | \
                 do_cmd openssl rsautl -decrypt -inkey ${PRIVATE_KEY} \
                 -in ${DISK_KEY_SSL} -passin stdin | \
-                do_cmd cryptsetup -q -d - luksOpen /dev/xenclient/config config || {
+                do_cmd cryptsetup -q -d - luksOpen /dev/openxt/config config || {
                 rm -f ${CAPTURE}
                 continue
             }
@@ -91,10 +91,10 @@ while true; do
     do_mount -o ro /dev/mapper/config ${STATUS_MOUNT}/config || break
     STEPS="umount_config,${STEPS}"
 
-    if [ -r /dev/xenclient/log ]; then
+    if [ -r /dev/openxt/log ]; then
         if [ ! -r /dev/mapper/log ]; then
             do_cmd cryptsetup -q -d ${STATUS_MOUNT}/config/keys/log-lv.key \
-                create log /dev/xenclient/log || break
+                create log /dev/openxt/log || break
             STEPS="close_log,${STEPS}"
         fi
 
@@ -102,10 +102,10 @@ while true; do
         STEPS="umount_log,${STEPS}"
     fi
 
-    if [ -r /dev/xenclient/cores ]; then
+    if [ -r /dev/openxt/cores ]; then
         if [ ! -r /dev/mapper/cores ]; then
             do_cmd cryptsetup -q -d ${STATUS_MOUNT}/config/keys/cores-lv.key \
-                create cores /dev/xenclient/cores || break
+                create cores /dev/openxt/cores || break
             STEPS="close_cores,${STEPS}"
         fi
 
@@ -134,13 +134,13 @@ for i in $STEPS; do
             do_umount ${STATUS_MOUNT}/var/cores
             ;;
         close_cores)
-            do_cmd cryptsetup remove /dev/xenclient/cores
+            do_cmd cryptsetup remove /dev/openxt/cores
             ;;
         umount_log)
             do_umount ${STATUS_MOUNT}/var/log
             ;;
         close_log)
-            do_cmd cryptsetup remove /dev/xenclient/log
+            do_cmd cryptsetup remove /dev/openxt/log
             ;;
         umount_config)
             do_umount ${STATUS_MOUNT}/config

@@ -85,15 +85,15 @@ partition_exists()
     [ -b "/dev/${PARTITION}" ]
 }
 
-is_xc_partition()
+is_oxt_partition()
 {
     local PARTITION="$1"
 
     local PARTITION_TYPE=$(get_partition_type "${PARTITION}")
-    [ "${PARTITION_TYPE}" = "${XC_PARTITION_TYPE}" ] && return 0
+    [ "${PARTITION_TYPE}" = "${PARTITION_TYPE}" ] && return 0
 
     local VG_NAME=$(get_vg_name "${PARTITION}")
-    [ "${VG_NAME}" = "xenclient" ] && return 0
+    [ "${VG_NAME}" = "openxt" ] && return 0
 
     return 1
 }
@@ -121,11 +121,10 @@ is_oem_partition()
 get_partition_type()
 {
     local PARTITION="$1"
-    local DISK=$(get_partition_disk "${PARTITION}")
-    local NODE=$(get_partition_node "${PARTITION}")
+    local DISK=$(echo "${PARTITION}" | sed 's/[0-9]*$//')
 
     fdisk -ul "/dev/${DISK}" |
-        grep "^/dev/${NODE} " |
+        grep "^/dev/${PARTITION} " |
         sed 's/\*//' |
         awk '{print $5}'
 }
@@ -133,17 +132,15 @@ get_partition_type()
 get_vg_name()
 {
     local PARTITION="$1"
-    local NODE=$(get_partition_node "${PARTITION}")
 
-    pvdisplay -c | grep "^ */dev/${NODE}:" | awk -F: '{print $2}'
+    pvdisplay -c | grep "^ */dev/${PARTITION}:" | awk -F: '{print $2}'
 }
 
 disk_has_free_space()
 {
     local PARTITION="$1"
-    local DISK=$(get_partition_disk "${PARTITION}")
-    local PARTITION_NUM=$(get_partition_number "${PARTITION}")
-    local NODE=$(get_partition_node "${PARTITION}")
+    local DISK=$(echo "${PARTITION}" | sed 's/[0-9]*$//')
+    local PARTITION_NUM=$(echo "${PARTITION}" | sed 's/^.*[a-z]//')
 
     # Try creating primary partition, but don't write changes to disk.
     OUTPUT=$(fdisk -u "/dev/${DISK}" <<EOF 2>&1
@@ -161,12 +158,12 @@ EOF
     echo "${OUTPUT}" | grep -q 'No free sectors available' && return 1
 
     # Will partition be large enough?
-    FIRST_SECTOR=$(echo "${OUTPUT}" | sed 's/\*//' |
-                   grep "^/dev/${NODE}" |
+    FIRST_SECTOR=$(echo "${OUTPUT}" |
+                   grep "^/dev/${PARTITION}" |
                    awk '{print $2}')
 
-    LAST_SECTOR=$(echo "${OUTPUT}" | sed 's/\*//' |
-                  grep "^/dev/${NODE}" |
+    LAST_SECTOR=$(echo "${OUTPUT}" |
+                  grep "^/dev/${PARTITION}" |
                   awk '{print $3}')
 
     if [ -z "${FIRST_SECTOR}" -o -z "${LAST_SECTOR}" ] ; then
@@ -315,7 +312,7 @@ validate_partition_mode()
 
     case "${MODE}" in
         overwrite)
-            if [ -z "${XC_PARTITION}" ] ; then
+            if [ -z "${PARTITION}" ] ; then
                 if [ "${ABORT_IF_INVALID}" = "true" ] ; then
                     echo "ERROR: Cannot overwrite ${PRODUCT_BRAND}" \
                          "installation on disk '${TARGET_DISK}': existing" \
@@ -328,7 +325,7 @@ validate_partition_mode()
             ;;
 
         use-free-space)
-            if [ "${XC_PARTITION}" ] ; then
+            if [ "${PARTITION}" ] ; then
                 if [ "${ABORT_IF_INVALID}" = "true" ] ; then
                     echo "ERROR: Cannot install into free space on disk" \
                          "'${TARGET_DISK}': existing installation found." >&2
@@ -400,14 +397,14 @@ partition_mode_is_unique()
             fi
 
             # Check if equivalent to "overwrite".
-            if [ "${XC_PARTITION}" -a \
+            if [ "${PARTITION}" -a \
                  -z "${OTHER_PARTITIONS}" -a \
                  "${HAVE_FREE_SPACE}" != "true" ] ; then
                 return 1
             fi
 
             # Check if equivalent to "use-free-space".
-            if [ -z "${XC_PARTITION}" -a \
+            if [ -z "${PARTITION}" -a \
                  "${HAVE_UNUSED_PARTITION}" = "true" -a \
                  "${HAVE_FREE_SPACE}" = "true" ] ; then
                 return 1
@@ -416,7 +413,7 @@ partition_mode_is_unique()
 
         erase-entire-disk)
             # Check if equivalent to "overwrite".
-            if [ "${XC_PARTITION}" -a \
+            if [ "${PARTITION}" -a \
                  -z "${OEM_PARTITIONS}" -a \
                  -z "${OTHER_PARTITIONS}" -a \
                  "${HAVE_FREE_SPACE}" != "true" ] ; then
@@ -424,7 +421,7 @@ partition_mode_is_unique()
             fi
 
             # Check if equivalent to "use-free-space".
-            if [ -z "${XC_PARTITION}" -a \
+            if [ -z "${PARTITION}" -a \
                  -z "${OEM_PARTITIONS}" -a \
                  -z "${OTHER_PARTITIONS}" ] ; then
                 return 1
@@ -445,28 +442,28 @@ partition_mode_is_unique()
 write_partition_conf()
 {
     local PRESERVE_PARTITIONS=
-    local CREATE_XC_PARTITION=
+    local CREATE_PARTITION=
     local REMOVE_PARTITIONS=
 
     case "${PARTITION_MODE}" in
         erase-entire-disk)
             PRESERVE_PARTITIONS=
-            CREATE_XC_PARTITION=true
+            CREATE_PARTITION=true
             ;;
 
         erase-non-oem)
             PRESERVE_PARTITIONS="${OEM_PARTITIONS}"
-            CREATE_XC_PARTITION=true
+            CREATE_PARTITION=true
             ;;
 
         use-free-space)
             PRESERVE_PARTITIONS="${EXISTING_PARTITIONS}"
-            CREATE_XC_PARTITION=true
+            CREATE_PARTITION=true
             ;;
 
         overwrite)
             PRESERVE_PARTITIONS="${EXISTING_PARTITIONS}"
-            CREATE_XC_PARTITION=false
+            CREATE_PARTITION=false
             ;;
 
         *)
@@ -475,11 +472,11 @@ write_partition_conf()
             ;;
     esac
 
-    if [ "${CREATE_XC_PARTITION}" = "true" ] ; then
+    if [ "${CREATE_PARTITION}" = "true" ] ; then
         local P
         for P in ${PRIMARY_PARTITIONS} ; do
             if ! partition_in_list "${P}" "${PRESERVE_PARTITIONS}" ; then
-                XC_PARTITION="${P}"
+                PARTITION="${P}"
                 break
             fi
         done
@@ -494,8 +491,8 @@ write_partition_conf()
 
     echo "PARTITION_MODE='${PARTITION_MODE}'" > ${PARTITION_CONF}
     echo "REMOVE_PARTITIONS='${REMOVE_PARTITIONS}'" >> ${PARTITION_CONF}
-    echo "CREATE_XC_PARTITION='${CREATE_XC_PARTITION}'" >> ${PARTITION_CONF}
-    echo "XC_PARTITION='${XC_PARTITION}'" >> ${PARTITION_CONF}
+    echo "CREATE_PARTITION='${CREATE_PARTITION}'" >> ${PARTITION_CONF}
+    echo "PARTITION='${PARTITION}'" >> ${PARTITION_CONF}
 }
 
 partition_in_list()

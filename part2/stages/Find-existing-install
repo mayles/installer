@@ -31,11 +31,17 @@ rm -f "${EXISTING_CONF}"
 
 detect_prior_installation()
 {
-    do_cmd vgs xenclient >&2 || return
+    local mount_type=""
+    determine_mount_name mount_type || return
 
+    local EXISTING_VERSION_FILE=""
     # read the version information from the detected filesystem:
     mount_existing_dom0 "${EXISTING_DOM0_MOUNT}"
-    local EXISTING_VERSION_FILE="${EXISTING_DOM0_MOUNT}/etc/xenclient.conf"
+    if [ ${mount_type} == "xenclient" ]; then
+       EXISTING_VERSION_FILE="${EXISTING_DOM0_MOUNT}/etc/xenclient.conf"
+    elif [ ${mount_type} == "openxt" ]; then
+       EXISTING_VERSION_FILE="${EXISTING_DOM0_MOUNT}/etc/issue"
+    fi
     EXISTING_VERSION="$(sed -ne 's/^version = //p' <${EXISTING_VERSION_FILE})"
     EXISTING_RELEASE="$(sed -ne 's/^release = //p' <${EXISTING_VERSION_FILE})"
     EXISTING_MEASURED_STATE="false"
@@ -62,6 +68,28 @@ is_upgradeable_release()
     done
     echo "Upgrade not allowed from detected release: ${RELEASE}" >&2
     return 1
+}
+
+determine_mount_name()
+{
+    local __ret=$1
+
+    TYPE=`vgs xenclient |grep xenclient`
+
+    if [ "x${TYPE}" == "x" ]; then
+       TYPE=`vgs openxt | grep openxt`
+    fi
+
+    if [ "x${TYPE}" == "x" ]; then
+       return 1
+    fi
+
+    TYPE=${TYPE##*VFree}
+    TYPE=`echo ${TYPE} |xargs | cut -d" " -f 1`
+
+    eval $__ret=${TYPE}
+
+    return 0
 }
 
 choose_upgrade_or_install()

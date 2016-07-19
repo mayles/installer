@@ -72,7 +72,7 @@ MBR_BINARY="${INSTALL_CONFIG_DIR}/mbr.bin"
 DIALOG_WARN_RC="${INSTALL_CONFIG_DIR}/dialog-warn.rc"
 DIALOG_CAUTION_RC="${INSTALL_CONFIG_DIR}/dialog-caution.rc"
 
-ROOT_DEV="/dev/xenclient/root"
+ROOT_DEV="/dev/openxt/root"
 
 # Directory used to mount new dom0 filesystem:
 DOM0_MOUNT="${MOUNT_ROOT}/dom0"
