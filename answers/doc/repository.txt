@@ -9,7 +9,7 @@ a directory named "packages.main" containing three metadata files:
 It currently has eight lines:
 1: "xc:main" to identify this as the main install repository.
 2: "pack:Base Pack" as a human readable identity string.
-3: "product:XenClient" as another human readable identity string.
+3: "product:OpenXT" as another human readable identity string.
 4: "build:${BuildID}" to indicate the software version.
 5: "version:${Version}" to indicate the software version.
 6: "release:${Release}" to indicate the software version.

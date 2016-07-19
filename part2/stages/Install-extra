@@ -36,7 +36,7 @@ case "${INSTALL_MODE}" in
     *)       echo "Unknown install mode ${INSTALL_MODE}" >&2 ; exit ${Abort} ;;
 esac
 
-apply_xc_packages "${APPLY_MODE}" "${PACKAGES_DIR}" || exit ${Abort}
+apply_packages "${APPLY_MODE}" "${PACKAGES_DIR}" || exit ${Abort}
 
 mixedgauge "Installation successful" 100
 

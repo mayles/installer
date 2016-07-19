@@ -42,6 +42,6 @@ if interactive ; then
     dialog --infobox "\n\nActivating new installation..." 7 35
 fi
 
-commit_xc_packages "${PACKAGES_DIR}" || exit ${Abort}
+commit_packages "${PACKAGES_DIR}" || exit ${Abort}
 
 exit ${Continue}

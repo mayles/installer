@@ -33,11 +33,11 @@ scan_partitions()
 
     local N
     for N in 1 2 3 4 ; do
-        PRIMARY_PARTITIONS="${PRIMARY_PARTITIONS} ${TARGET_DISK}/${N}"
+        PRIMARY_PARTITIONS="${PRIMARY_PARTITIONS} ${TARGET_DISK}${N}"
     done
 
     EXISTING_PARTITIONS=
-    XC_PARTITION=
+    PARTITION=
     OEM_PARTITIONS=
     OTHER_PARTITIONS=
     HAVE_UNUSED_PARTITION=false
@@ -48,14 +48,14 @@ scan_partitions()
         if partition_exists "${P}" ; then
             EXISTING_PARTITIONS="${EXISTING_PARTITIONS} ${P}"
 
-            if is_xc_partition "${P}" ; then
-                if [ "${XC_PARTITION}" ] ; then
+            if is_oxt_partition "${P}" ; then
+                if [ "${PARTITION}" ] ; then
                     echo "ERROR: Found more than one ${PRODUCT_BRAND}" \
                          "partition." >&2
                     exit ${Abort}
                 fi
 
-                XC_PARTITION="${P}"
+                PARTITION="${P}"
             elif is_oem_partition "${P}" ; then
                 OEM_PARTITIONS="${OEM_PARTITIONS} ${P}"
             else
@@ -71,7 +71,7 @@ scan_partitions()
 
     echo "Partition scan results:" >&2
     echo "    Existing primary partitions:${EXISTING_PARTITIONS}" >&2
-    echo "    Existing ${PRODUCT_BRAND} partition: ${XC_PARTITION}" >&2
+    echo "    Existing ${PRODUCT_BRAND} partition: ${PARTITION}" >&2
     echo "    OEM partitions:${OEM_PARTITIONS}" >&2
     echo "    Other partitions:${OTHER_PARTITIONS}" >&2
     echo "    Unused primary partition exists: ${HAVE_UNUSED_PARTITION}" >&2

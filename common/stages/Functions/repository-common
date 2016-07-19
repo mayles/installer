@@ -23,7 +23,7 @@
 # XC-REPOSITORY:
 #   xc:main
 #   pack:Base Pack
-#   product:XenClient
+#   product:OpenXT
 #   build:<buildnum>
 #   version:<version>
 #   release:<release>

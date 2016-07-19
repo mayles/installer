@@ -27,6 +27,6 @@ fi
 
 mount_dom0 "${ROOT_DEV}" || exit ${Abort}
 
-commit_xc_packages "${PACKAGES_DIR}" || exit ${Abort}
+commit_packages "${PACKAGES_DIR}" || exit ${Abort}
 
 exit ${Continue}

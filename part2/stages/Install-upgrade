@@ -30,7 +30,7 @@ fi
 mixedgauge "Upgrading ${PRODUCT_BRAND}." 0
 PERCENT=10
 
-apply_xc_packages "upgrade" "${PACKAGES_DIR}" || exit ${Abort}
+apply_packages "upgrade" "${PACKAGES_DIR}" || exit ${Abort}
 
 mixedgauge "Upgrade successful" 100
 

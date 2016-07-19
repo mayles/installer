@@ -38,7 +38,7 @@ mixedgauge "Installing ${PRODUCT_BRAND}." 0
 PERCENT=10
 
 # Installing dom0's rootfs mounts boot, config, root, log, storage
-apply_xc_packages "install" "${PACKAGES_DIR}" || exit ${Abort}
+apply_packages "install" "${PACKAGES_DIR}" || exit ${Abort}
 
 install_vhds_and_vms || exit ${Abort}
 
